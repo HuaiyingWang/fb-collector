@@ -917,6 +917,7 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
       el.innerHTML =
         '<h3 class="item__title"><label class="vh" for="t-' + it.id + '">標題</label>' +
           '<input id="t-' + it.id + '" data-act="title" value="' + esc(it.title) + '" placeholder="補一個標題…"></h3>' +
+        (it.body ? '<div class="item__body">' + esc(it.body) + '</div>' : '') +
         (it.covers && it.covers.length
           ? '<div class="item__covers">' + it.covers.map(function (src, i) {
               return '<span class="item__shot"><img src="' + esc(src) + '" alt="">' +
@@ -925,7 +926,6 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
             }).join('') + '</div>'
           : '') +
         (pendingCover === it.id ? '<p class="item__hint">按 Ctrl+V 貼上截圖，可以連續貼多張。按 Esc 結束。</p>' : '') +
-        (it.body ? '<div class="item__body">' + esc(it.body) + '</div>' : '') +
         (!it.body && it.stub
           ? '<p class="item__stub"><b>' +
               esc((it.links && it.links[0] ? it.links[0].domain : (it.source || {}).slug || 'facebook.com')) +
