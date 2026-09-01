@@ -235,7 +235,7 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
 
     <details class="tool">
       <summary>雲端同步</summary>
-      <p>每台裝置輸入同一組通行碼。開啟時若本機沒有資料會自動抓雲端；平常在整理完的裝置按「上傳到雲端」。</p>
+      <p>每台裝置都要：①「資料與分類」裡把「OG 代理網址」設成你的 Worker 網址　②這裡填同一組通行碼。開啟時若本機沒有資料會自動抓雲端；平常在整理完的裝置按「上傳到雲端」。</p>
       <div class="toolbar">
         <label class="vh" for="syncKey">同步通行碼</label>
         <input id="syncKey" type="password" placeholder="同步通行碼" autocomplete="off" style="flex:0 1 12rem;font:inherit;font-size:.9375rem;padding:.4rem .6rem;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)">
@@ -1663,6 +1663,13 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
   });
   document.getElementById('syncPush').addEventListener('click', function () { pushCloud(false); });
   document.getElementById('syncPull').addEventListener('click', function () { pullCloud({ force: false }); });
+
+  /* 改了「OG 代理網址」就存檔（補齊與雲端同步都靠這個欄位推導 Worker 位址） */
+  document.getElementById('proxyUrl').addEventListener('change', function () {
+    settings.endpoint = this.value.trim() || settings.endpoint;
+    this.value = settings.endpoint;
+    saveSettings();
+  });
 
   document.getElementById('enrich').addEventListener('click', function () {
     var box = document.getElementById('proxyUrl');
