@@ -233,6 +233,21 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
       </details>
     </details>
 
+    <details class="tool">
+      <summary>雲端同步</summary>
+      <p>每台裝置輸入同一組通行碼。開啟時若本機沒有資料會自動抓雲端；平常在整理完的裝置按「上傳到雲端」。</p>
+      <div class="toolbar">
+        <label class="vh" for="syncKey">同步通行碼</label>
+        <input id="syncKey" type="password" placeholder="同步通行碼" autocomplete="off" style="flex:0 1 12rem;font:inherit;font-size:.9375rem;padding:.4rem .6rem;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)">
+        <button type="button" class="btn btn--primary" id="syncPush">上傳到雲端</button>
+        <button type="button" class="btn" id="syncPull">從雲端更新</button>
+        <label style="font-size:.875rem;color:var(--muted);display:inline-flex;align-items:center;gap:.3rem">
+          <input type="checkbox" id="syncAuto"> 改動後自動上傳
+        </label>
+      </div>
+      <p id="syncNote" style="margin:.6rem 0 0;font-size:.875rem;color:var(--muted)"></p>
+    </details>
+
     <details class="tool" open>
       <summary>貼上連結</summary>
       <p>FB 貼文或文章網址都可以，一行一個。會先建立「只有連結」的項目，之後在該頁面用擷取書籤補內容，會自動併回同一張卡。</p>
@@ -1516,11 +1531,100 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
       .catch(function () { return false; });
   }
 
+  /* ============ 雲端同步（Worker /sync + R2） ============ */
+  var syncState = { key: '', auto: false, timer: null };
+
+  function saveSettings() {
+    return _rawSave({ id: '__settings', endpoint: settings.endpoint,
+                      syncKey: syncState.key, syncAuto: syncState.auto });
+  }
+  function syncBase() {
+    try { return new URL(settings.endpoint).origin + '/sync'; } catch (e) { return ''; }
+  }
+  function syncMsg(msg, warn) {
+    var el = document.getElementById('syncNote');
+    if (el) { el.textContent = msg; el.style.color = warn ? '#8A2B4A' : '#5F564E'; }
+  }
+
+  function pushCloud(silent) {
+    var base = syncBase();
+    if (!base || !syncState.key) { if (!silent) syncMsg('先填同步通行碼', true); return Promise.resolve(false); }
+    if (!silent) syncMsg('上傳中…');
+    var body = JSON.stringify({ version: 2, savedAt: Date.now(), items: sorted() });
+    return fetch(base, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-Sync-Key': syncState.key },
+      body: body
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d && d.ok) {
+        syncMsg('已上傳 ' + fmtDate(d.savedAt) + '（' + Math.round((d.bytes || 0) / 1024) + ' KB）');
+        return true;
+      }
+      syncMsg((d && d.note) || '上傳失敗', true); return false;
+    }).catch(function () { syncMsg('上傳失敗（連不到 Worker）', true); return false; });
+  }
+
+  function pullCloud(opts) {
+    opts = opts || {};
+    var base = syncBase();
+    if (!base || !syncState.key) { if (!opts.silent) syncMsg('先填同步通行碼', true); return Promise.resolve(false); }
+    if (!opts.silent) syncMsg('下載中…');
+    return fetch(base, { headers: { 'X-Sync-Key': syncState.key } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || d.ok === false) { syncMsg((d && d.note) || '下載失敗', true); return false; }
+        var incoming = d.items || [];
+        if (d.empty || !incoming.length) { if (!opts.silent) syncMsg('雲端還沒有資料'); return false; }
+        if (!opts.force && items.length &&
+            !confirm('用雲端的 ' + incoming.length + ' 筆覆蓋這台的 ' + items.length + ' 筆？\n建議先「上傳到雲端」再拉。')) return false;
+        var chain = Promise.resolve();
+        items.forEach(function (it) { chain = chain.then(function () { return remove(it.id); }); });
+        items = incoming.map(function (it) {
+          if (!it.covers) it.covers = it.cover ? [it.cover] : [];
+          delete it.cover;
+          return it;
+        });
+        items.forEach(function (it) { chain = chain.then(function () { return _rawSave(it); }); });
+        return chain.then(function () {
+          applyCategories(); renderCatManager(); render();
+          syncMsg('已同步 ' + incoming.length + ' 筆（雲端存於 ' + fmtDate(d.savedAt || Date.now()) + '）');
+          return true;
+        });
+      })
+      .catch(function () { syncMsg('下載失敗（連不到 Worker）', true); return false; });
+  }
+
+  function scheduleAutoPush() {
+    if (!syncState.auto || !syncState.key) return;
+    clearTimeout(syncState.timer);
+    syncState.timer = setTimeout(function () { pushCloud(true); }, 3000);
+  }
+
+  /* 包一層 save：非 __ 開頭的資料被寫入後，開了自動上傳就排程推送 */
+  var _rawSave = save;
+  save = function (item) {
+    var p = _rawSave(item);
+    if (item && String(item.id).slice(0, 2) !== '__') scheduleAutoPush();
+    return p;
+  };
+
+  document.getElementById('syncKey').addEventListener('change', function () {
+    syncState.key = this.value.trim();
+    saveSettings();
+  });
+  document.getElementById('syncAuto').addEventListener('change', function () {
+    syncState.auto = this.checked;
+    saveSettings();
+    if (syncState.auto) pushCloud(false);
+  });
+  document.getElementById('syncPush').addEventListener('click', function () { pushCloud(false); });
+  document.getElementById('syncPull').addEventListener('click', function () { pullCloud({ force: false }); });
+
   document.getElementById('enrich').addEventListener('click', function () {
     var box = document.getElementById('proxyUrl');
     var ep = box.value.trim() || settings.endpoint;
     settings.endpoint = ep;
-    save({ id: '__settings', endpoint: ep });
+    saveSettings();
 
     var queue = items.filter(function (i) { return (i.stub || !i.body) && targetUrl(i); });
     if (!queue.length) return toast('沒有需要補齊的項目');
@@ -1579,8 +1683,14 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
   }).then(function (rows) {
     var all = rows || [];
     var st = all.filter(function (r) { return r.id === '__settings'; })[0];
-    if (st && st.endpoint) settings.endpoint = st.endpoint;
+    if (st) {
+      if (st.endpoint) settings.endpoint = st.endpoint;
+      if (st.syncKey) syncState.key = st.syncKey;
+      syncState.auto = !!st.syncAuto;
+    }
     document.getElementById('proxyUrl').value = settings.endpoint;
+    document.getElementById('syncKey').value = syncState.key;
+    document.getElementById('syncAuto').checked = syncState.auto;
     var ct = all.filter(function (r) { return r.id === '__cats'; })[0];
     if (ct && Array.isArray(ct.list)) customCategories = ct.list;
     applyCategories();
@@ -1591,6 +1701,8 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
     });
     renderCatManager();
     render();
+    /* 本機沒有任何項目、但設過通行碼 → 自動抓雲端 */
+    if (!items.length && syncState.key) pullCloud({ silent: true, force: true });
   });
 })();
 </script>
