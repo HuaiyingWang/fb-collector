@@ -1274,11 +1274,31 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
     });
   }
 
+  /* 貼上的截圖縮到最長邊 1280、轉 JPEG，避免 IndexedDB 與雲端同步爆量 */
   function readImage(file) {
     return new Promise(function (resolve) {
       var r = new FileReader();
-      r.onload = function () { resolve(r.result); };
       r.onerror = function () { resolve(null); };
+      r.onload = function () {
+        var raw = r.result;
+        var img = new Image();
+        img.onerror = function () { resolve(raw); };
+        img.onload = function () {
+          var scale = Math.min(1, 1280 / Math.max(img.width, img.height));
+          var w = Math.round(img.width * scale);
+          var h = Math.round(img.height * scale);
+          var c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          var ctx = c.getContext('2d');
+          ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          try {
+            var out = c.toDataURL('image/jpeg', 0.72);
+            resolve(out.length < raw.length ? out : raw);
+          } catch (e) { resolve(raw); }
+        };
+        img.src = raw;
+      };
       r.readAsDataURL(file);
     });
   }
@@ -1546,18 +1566,36 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
     if (el) { el.textContent = msg; el.style.color = warn ? '#8A2B4A' : '#5F564E'; }
   }
 
+  /* 同步用：整包太大時，拿掉 data: 內嵌截圖（http 圖與其他欄位保留） */
+  function stripDataCovers(list) {
+    return list.map(function (it) {
+      if (!it.covers || !it.covers.some(function (c) { return /^data:/.test(c); })) return it;
+      var clone = {};
+      for (var k in it) clone[k] = it[k];
+      clone.covers = it.covers.filter(function (c) { return !/^data:/.test(c); });
+      clone.coversLocalOnly = true;
+      return clone;
+    });
+  }
+
   function pushCloud(silent) {
     var base = syncBase();
     if (!base || !syncState.key) { if (!silent) syncMsg('先填同步通行碼', true); return Promise.resolve(false); }
     if (!silent) syncMsg('上傳中…');
     var body = JSON.stringify({ version: 2, savedAt: Date.now(), items: sorted() });
+    var trimmed = false;
+    if (body.length > 20 * 1024 * 1024) {
+      body = JSON.stringify({ version: 2, savedAt: Date.now(), items: stripDataCovers(sorted()) });
+      trimmed = true;
+    }
     return fetch(base, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'X-Sync-Key': syncState.key },
       body: body
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (d && d.ok) {
-        syncMsg('已上傳 ' + fmtDate(d.savedAt) + '（' + Math.round((d.bytes || 0) / 1024) + ' KB）');
+        syncMsg('已上傳 ' + fmtDate(d.savedAt) + '（' + Math.round((d.bytes || 0) / 1024) + ' KB）' +
+                (trimmed ? '，截圖太多未包含' : ''));
         return true;
       }
       syncMsg((d && d.note) || '上傳失敗', true); return false;
@@ -1577,11 +1615,17 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
         if (d.empty || !incoming.length) { if (!opts.silent) syncMsg('雲端還沒有資料'); return false; }
         if (!opts.force && items.length &&
             !confirm('用雲端的 ' + incoming.length + ' 筆覆蓋這台的 ' + items.length + ' 筆？\n建議先「上傳到雲端」再拉。')) return false;
+        /* 保留這台本機才有的內嵌截圖，別被瘦身過的雲端資料清掉 */
+        var localCovers = {};
+        items.forEach(function (it) {
+          if (it.covers && it.covers.some(function (c) { return /^data:/.test(c); })) localCovers[it.id] = it.covers;
+        });
         var chain = Promise.resolve();
         items.forEach(function (it) { chain = chain.then(function () { return remove(it.id); }); });
         items = incoming.map(function (it) {
           if (!it.covers) it.covers = it.cover ? [it.cover] : [];
           delete it.cover;
+          if (it.coversLocalOnly && localCovers[it.id]) { it.covers = localCovers[it.id]; delete it.coversLocalOnly; }
           return it;
         });
         items.forEach(function (it) { chain = chain.then(function () { return _rawSave(it); }); });
