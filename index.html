@@ -61,6 +61,17 @@ details.help li{ margin-bottom:.35rem; }
 .chip[aria-pressed="true"]:hover{ background:var(--brass-dark); border-color:var(--brass-dark); }
 .chip small{ opacity:.75; margin-inline-start:.3rem; font-variant-numeric:tabular-nums; }
 
+/* 分類管理 */
+.catlist{ display:flex; flex-direction:column; gap:.5rem; }
+.catrow{ display:flex; align-items:center; gap:.6rem; }
+.catrow__dot{ inline-size:1rem; block-size:1rem; border-radius:999px; flex:none; border:1px solid var(--hair); }
+.catrow__label{ flex:1 1 auto; }
+.catrow__fixed{ font-size:.8125rem; color:var(--muted); }
+.catrow input[type="text"]{ flex:1 1 auto; min-width:0; font:inherit; font-size:.9375rem;
+  padding:.3rem .5rem; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink); }
+.catrow input[type="color"]{ inline-size:2.25rem; block-size:2rem; padding:0; flex:none;
+  border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; }
+
 .countline{ color:var(--muted); font-size:.9375rem; margin:0 0 1rem; }
 
 /* 清單改為卡片格線：桌機一行 3 欄，同列卡片以 grid stretch 等高 */
@@ -186,6 +197,19 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
     <p id="storageNote" style="margin:.9rem 0 0;"></p>
   </section>
 
+  <section class="panel" aria-labelledby="cat-h">
+    <h2 id="cat-h">分類</h2>
+    <p>內建分類不能刪。新增的分類存在這個瀏覽器，會套用到卡片選單、篩選標籤和擷取書籤。補齊內容時，文章關鍵字對到分類名稱會自動歸類。</p>
+    <div id="catList" class="catlist"></div>
+    <div class="toolbar" style="margin-top:.75rem">
+      <label class="vh" for="catName">新分類名稱</label>
+      <input id="catName" type="text" placeholder="新分類名稱…" style="flex:0 1 12rem;font:inherit;font-size:.9375rem;padding:.4rem .6rem;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)">
+      <label class="vh" for="catColor">分類顏色</label>
+      <input id="catColor" type="color" value="#1F5673" style="inline-size:2.5rem;block-size:2.25rem;padding:0;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer">
+      <button type="button" class="btn btn--primary" id="catAdd">新增分類</button>
+    </div>
+  </section>
+
   <section class="panel" aria-labelledby="link-h">
     <h2 id="link-h">貼上連結</h2>
     <p>FB 貼文或文章網址都可以，一行一個。會先建立「只有連結」的項目，之後在該頁面用擷取書籤補內容，會自動併回同一張卡。</p>
@@ -217,14 +241,16 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
 (function () {
   'use strict';
 
-  var CATEGORIES = [
+  var DEFAULT_CATEGORIES = [
     { slug:'course', label:'AI課程',   color:'#A64B1B' },
     { slug:'prompt', label:'提示詞',   color:'#2F6B5E' },
     { slug:'tool',   label:'工具實測', color:'#1F5673' },
     { slug:'note',   label:'觀念筆記', color:'#6B4A8C' },
-    { slug:'biz',    label:'接案心得', color:'#8A2B4A' },
-    { slug:'inbox',  label:'未分類',   color:'#8C8071' }
+    { slug:'biz',    label:'接案心得', color:'#8A2B4A' }
   ];
+  var INBOX_CAT = { slug:'inbox', label:'未分類', color:'#8C8071' };
+  var customCategories = [];                                  /* 使用者新增，載入時從 __cats 帶入 */
+  var CATEGORIES = DEFAULT_CATEGORIES.concat([INBOX_CAT]);    /* applyCategories() 會重建 */
   var catMap = {};
   CATEGORIES.forEach(function (c) { catMap[c.slug] = c; });
 
@@ -795,6 +821,111 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
     return 'javascript:' + encodeURIComponent(src);
   }
 
+  /* ============ 分類管理 ============ */
+
+  /* 依 DEFAULT + 自訂 + 未分類 重建 CATEGORIES / catMap，並更新兩顆書籤的網址 */
+  function applyCategories() {
+    CATEGORIES = DEFAULT_CATEGORIES.concat(customCategories, [INBOX_CAT]);
+    catMap = {};
+    CATEGORIES.forEach(function (c) { catMap[c.slug] = c; });
+    var b1 = document.getElementById('bmlet');
+    var b2 = document.getElementById('bmletBatch');
+    if (b1) b1.href = buildBookmarklet();
+    if (b2) b2.href = buildBatchBookmarklet();
+  }
+
+  function isCustomCat(slug) {
+    return customCategories.some(function (c) { return c.slug === slug; });
+  }
+  function persistCats() {
+    return save({ id: '__cats', list: customCategories });
+  }
+
+  function renderCatManager() {
+    var box = document.getElementById('catList');
+    if (!box) return;
+    box.innerHTML = '';
+    CATEGORIES.forEach(function (c) {
+      var row = document.createElement('div');
+      row.className = 'catrow';
+      if (isCustomCat(c.slug)) {
+        row.innerHTML =
+          '<input type="color" data-act="catcolor" data-slug="' + c.slug + '" value="' + esc(c.color) + '" aria-label="' + esc(c.label) + ' 顏色">' +
+          '<input type="text" data-act="catlabel" data-slug="' + c.slug + '" value="' + esc(c.label) + '" aria-label="分類名稱">' +
+          '<button type="button" class="btn btn--danger" data-act="catdel" data-slug="' + c.slug + '">刪除</button>';
+      } else {
+        row.innerHTML =
+          '<span class="catrow__dot" style="background:' + esc(c.color) + '"></span>' +
+          '<span class="catrow__label">' + esc(c.label) + '</span>' +
+          '<span class="catrow__fixed">內建</span>';
+      }
+      box.appendChild(row);
+    });
+  }
+
+  function addCategory() {
+    var nameEl = document.getElementById('catName');
+    var colorEl = document.getElementById('catColor');
+    var label = (nameEl.value || '').trim();
+    if (!label) return toast('請先輸入分類名稱');
+    if (CATEGORIES.some(function (c) { return c.label === label; })) return toast('已經有同名分類了');
+    customCategories.push({
+      slug: 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+      label: label,
+      color: colorEl.value || '#8C8071'
+    });
+    persistCats().then(function () {
+      nameEl.value = '';
+      applyCategories(); renderCatManager(); render();
+      toast('已新增分類「' + label + '」');
+    });
+  }
+
+  function deleteCategory(slug) {
+    var used = items.filter(function (i) { return i.category === slug; });
+    if (!confirm('刪除分類「' + (catMap[slug] || {}).label + '」？' +
+        (used.length ? '\n有 ' + used.length + ' 筆會改成「未分類」。' : ''))) return;
+    customCategories = customCategories.filter(function (c) { return c.slug !== slug; });
+    var chain = persistCats();
+    used.forEach(function (it) {
+      it.category = 'inbox';
+      chain = chain.then(function () { return save(it); });
+    });
+    chain.then(function () {
+      applyCategories(); renderCatManager(); render();
+      toast('已刪除分類');
+    });
+  }
+
+  function updateCategory(slug, patch) {
+    var c = customCategories.filter(function (x) { return x.slug === slug; })[0];
+    if (!c) return;
+    Object.assign(c, patch);
+    persistCats().then(function () { applyCategories(); render(); });
+  }
+
+  (function wireCatManager() {
+    var box = document.getElementById('catList');
+    if (box) {
+      box.addEventListener('change', function (e) {
+        var act = e.target.dataset.act, slug = e.target.dataset.slug;
+        if (act === 'catlabel') {
+          var v = e.target.value.trim();
+          if (!v) { e.target.value = (catMap[slug] || {}).label || ''; return; }
+          updateCategory(slug, { label: v });
+        } else if (act === 'catcolor') {
+          updateCategory(slug, { color: e.target.value });
+        }
+      });
+      box.addEventListener('click', function (e) {
+        var b = e.target.closest('button[data-act="catdel"]');
+        if (b) deleteCategory(b.dataset.slug);
+      });
+    }
+    var addBtn = document.getElementById('catAdd');
+    if (addBtn) addBtn.addEventListener('click', addCategory);
+  })();
+
   /* ============ 儲存層 ============ */
   var DB_NAME = 'fbCollector', STORE = 'items';
   var db = null, memory = [], usingMemory = false;
@@ -1333,6 +1464,27 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
         if (d.description && !it.body) { it.body = d.description; got = true; }
         if (d.title && it.links && it.links[0] && !it.links[0].title) it.links[0].title = d.title;
         if (d.image && !(it.covers || []).length) { it.covers = [d.image]; got = true; }
+        if (d.keywords && d.keywords.length) {
+          var tags = (it.tags || []).slice();
+          var before = tags.length;
+          d.keywords.forEach(function (k) {
+            var t = (/^#/.test(k) ? k : '#' + k).replace(/\s+/g, '');
+            if (t.length > 1 && tags.indexOf(t) === -1 && tags.length < 15) tags.push(t);
+          });
+          if (tags.length !== before) { it.tags = tags; got = true; }
+          /* 連動分類：還沒分類時，關鍵字剛好對到某個分類名稱就自動歸類 */
+          if (!it.category || it.category === 'inbox') {
+            var hit = '';
+            d.keywords.forEach(function (k) {
+              if (hit) return;
+              var c = CATEGORIES.filter(function (x) {
+                return x.slug !== 'inbox' && x.label === String(k).trim();
+              })[0];
+              if (c) hit = c.slug;
+            });
+            if (hit) { it.category = hit; got = true; }
+          }
+        }
         if (got) it.stub = false;
         return save(it).then(function () { return got; });
       })
@@ -1388,8 +1540,8 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
     );
   });
 
-  document.getElementById('bmlet').href = buildBookmarklet();
-  document.getElementById('bmletBatch').href = buildBatchBookmarklet();
+  applyCategories();
+  renderCatManager();
 
   openDb().then(function (d) {
     db = d; usingMemory = !d;
@@ -1404,11 +1556,15 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
     var st = all.filter(function (r) { return r.id === '__settings'; })[0];
     if (st && st.endpoint) settings.endpoint = st.endpoint;
     document.getElementById('proxyUrl').value = settings.endpoint;
-    items = all.filter(function (r) { return r.id !== '__settings'; }).map(function (it) {
+    var ct = all.filter(function (r) { return r.id === '__cats'; })[0];
+    if (ct && Array.isArray(ct.list)) customCategories = ct.list;
+    applyCategories();
+    items = all.filter(function (r) { return r.id !== '__settings' && r.id !== '__cats'; }).map(function (it) {
       if (!it.covers) it.covers = it.cover ? [it.cover] : [];
       delete it.cover;
       return it;
     });
+    renderCatManager();
     render();
   });
 })();
