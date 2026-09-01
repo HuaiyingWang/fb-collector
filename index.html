@@ -153,8 +153,11 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
   border-radius:6px; font-size:.8125rem; color:var(--muted); word-break:break-all; }
 .item__stub b{ display:block; color:var(--brass-dark); font-weight:500; margin-bottom:.2rem; }
 .item__badge--dead{ border-color:var(--warn); color:var(--warn); }
-#proxyUrl{ font:inherit; font-size:.9375rem; padding:.4rem .6rem; min-width:16rem;
+#proxyUrl{ font:inherit; font-size:.9375rem; padding:.4rem .6rem;
+  flex:1 1 14rem; min-width:0; max-width:100%;
   border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); }
+/* 工具列裡的輸入框在窄畫面要能縮，不要把版面撐爆 */
+.toolbar input{ min-width:0; max-width:100%; }
 
 #linkInput{ width:100%; font:inherit; font-size:.9375rem; padding:.6rem .75rem; resize:vertical;
   border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); margin-bottom:.75rem; }
