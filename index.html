@@ -86,8 +86,12 @@ details.help li{ margin-bottom:.35rem; }
 .item__title input:focus{ border-color:var(--line); background:#fff; }
 .item__title input::placeholder{ color:var(--muted); font-weight:400; }
 
-.item__body{ color:var(--muted); font-size:.9375rem; white-space:pre-wrap; margin:0;
-  max-height:6.5rem; overflow:hidden; }
+.item__body{ display:block; width:100%; font:inherit; font-size:.9375rem; color:var(--muted);
+  white-space:pre-wrap; margin:0; max-height:6.5rem; overflow:auto; resize:vertical;
+  border:1px solid transparent; border-radius:6px; padding:.2rem .4rem; background:transparent; }
+.item__body:hover{ border-color:var(--hair); }
+.item__body:focus{ border-color:var(--line); background:#fff; color:var(--ink); max-height:none; }
+.item__body::placeholder{ color:var(--muted); }
 .item__body.is-open{ max-height:none; }
 .item__tags{ margin:.5rem 0 0; font-size:.8125rem; color:var(--brass-dark); }
 .item__row{ display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin-top:.6rem; }
@@ -917,7 +921,8 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
       el.innerHTML =
         '<h3 class="item__title"><label class="vh" for="t-' + it.id + '">標題</label>' +
           '<input id="t-' + it.id + '" data-act="title" value="' + esc(it.title) + '" placeholder="補一個標題…"></h3>' +
-        (it.body ? '<div class="item__body">' + esc(it.body) + '</div>' : '') +
+        '<label class="vh" for="b-' + it.id + '">內文</label>' +
+        '<textarea id="b-' + it.id + '" class="item__body" data-act="body" rows="3" placeholder="補內文…">' + esc(it.body) + '</textarea>' +
         (it.covers && it.covers.length
           ? '<div class="item__covers">' + it.covers.map(function (src, i) {
               return '<span class="item__shot"><img src="' + esc(src) + '" alt="">' +
@@ -1178,7 +1183,7 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
 
   listEl.addEventListener('input', function (e) {
     var act = e.target.dataset.act;
-    if (act !== 'title' && act !== 'note') return;
+    if (act !== 'title' && act !== 'note' && act !== 'body') return;
     var id = e.target.closest('.item').dataset.id;
     var it = items.find(function (x) { return x.id === id; });
     if (!it) return;
@@ -1187,10 +1192,13 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
   });
 
   listEl.addEventListener('change', function (e) {
-    if (e.target.dataset.act !== 'cat') return;
+    var act = e.target.dataset.act;
+    if (act !== 'cat' && act !== 'body') return;
     var id = e.target.closest('.item').dataset.id;
     var it = items.find(function (x) { return x.id === id; });
     if (!it) return;
+    /* 內文改動後重繪，同步「展開全文」按鈕與「只有連結」提示的顯示 */
+    if (act === 'body') { it.body = e.target.value; save(it).then(render); return; }
     it.category = e.target.value;
     save(it).then(render);
   });
@@ -1243,7 +1251,7 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
         publishedAt: d.toISOString().slice(0, 10),
         category: it.category === 'inbox' ? 'note' : it.category,
         title: it.title || '未命名貼文',
-        excerpt: it.note || it.body.slice(0, 90),
+        excerpt: it.note || (it.body || '').slice(0, 90),
         permalink: (it.links && it.links[0] ? it.links[0].url : it.url),
         fbUrl: it.url,
         tags: it.tags,
