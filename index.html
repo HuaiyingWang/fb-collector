@@ -14,7 +14,7 @@
   --shade:#EFE7DA; --focus:#1F5673; --warn:#8A2B4A; --r:10px;
 }
 *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-body{ margin:0; background:var(--bg); color:var(--ink);
+body{ margin:0; background:var(--bg); color:var(--ink); overflow-x:hidden;
   font-family:"Noto Sans TC", system-ui, sans-serif; line-height:1.7; }
 .wrap{ max-width:100rem; margin:0 auto; padding:0 1.25rem; }
 :focus-visible{ outline:3px solid var(--focus); outline-offset:2px; border-radius:4px; }
@@ -88,14 +88,17 @@ details.help li{ margin-bottom:.35rem; }
 .countline{ color:var(--muted); font-size:.9375rem; margin:0 0 1rem; }
 
 /* 卡片格線：桌機 3 欄，同列等高（內容靠上排，短卡下緣留白，不再中間挖空） */
-#list{ display:grid; grid-template-columns:repeat(3, 1fr); gap:1rem; align-items:stretch; }
-@media (max-width:1080px){ #list{ grid-template-columns:repeat(2, 1fr); } }
-@media (max-width:620px){ #list{ grid-template-columns:1fr; } }
+/* minmax(0,1fr)：不讓長網址之類的內容把欄位撐爆版面 */
+#list{ display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:1rem; align-items:stretch; }
+@media (max-width:1080px){ #list{ grid-template-columns:repeat(2, minmax(0,1fr)); } }
+@media (max-width:620px){ #list{ grid-template-columns:minmax(0,1fr); } }
 
-.item{ position:relative; display:flex; flex-direction:column;
+.item{ position:relative; display:flex; flex-direction:column; min-width:0;
   background:var(--surface); border:1px solid var(--hair);
   border-inline-start:4px solid var(--cat,var(--brass)); border-radius:var(--r);
   padding:1rem 1.1rem; transition:box-shadow .16s ease; }
+.item > *{ min-width:0; }
+.item__tags,.item__why{ overflow-wrap:anywhere; }
 .item:hover{ box-shadow:0 4px 16px rgba(43,39,36,.1); }
 .item__foot{ margin:.6rem 0 0; }
 .item--todo{ border-inline-start-color:var(--warn); background:#FFFDF9; }
