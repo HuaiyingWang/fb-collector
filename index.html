@@ -1746,10 +1746,10 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
     var base = syncBase();
     if (!base || !syncState.key) { if (!silent) syncMsg('先填同步通行碼', true); return Promise.resolve(false); }
     if (!silent) syncMsg('上傳中…');
-    var body = JSON.stringify({ version: 2, savedAt: Date.now(), items: sorted() });
+    var body = JSON.stringify({ version: 2, savedAt: Date.now(), items: sorted(), categories: customCategories });
     var trimmed = false;
     if (body.length > 20 * 1024 * 1024) {
-      body = JSON.stringify({ version: 2, savedAt: Date.now(), items: stripDataCovers(sorted()) });
+      body = JSON.stringify({ version: 2, savedAt: Date.now(), items: stripDataCovers(sorted()), categories: customCategories });
       trimmed = true;
     }
     return fetch(base, {
@@ -1775,10 +1775,23 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
       .then(function (r) { return r.json(); })
       .then(function (d) {
         if (!d || d.ok === false) { syncMsg((d && d.note) || '下載失敗', true); return false; }
+
+        /* 分類跟項目是分開存的兩筆紀錄，這裡獨立同步，不受下面項目覆蓋確認影響，
+           不然使用者一取消覆蓋、或雲端項目是空的，新分類就永遠帶不過來 */
+        var gotCats = Array.isArray(d.categories);
+        if (gotCats) {
+          customCategories = d.categories;
+          _rawSave({ id: '__cats', list: customCategories }); /* 用 _rawSave：剛拉下來的東西不用馬上排程推回去 */
+          applyCategories(); renderCatManager(); render();
+        }
+
         var incoming = d.items || [];
-        if (d.empty || !incoming.length) { if (!opts.silent) syncMsg('雲端還沒有資料'); return false; }
+        if (d.empty || !incoming.length) {
+          if (!opts.silent) syncMsg(gotCats ? '雲端還沒有項目，已同步分類' : '雲端還沒有資料');
+          return gotCats;
+        }
         if (!opts.force && items.length &&
-            !confirm('用雲端的 ' + incoming.length + ' 筆覆蓋這台的 ' + items.length + ' 筆？\n建議先「上傳到雲端」再拉。')) return false;
+            !confirm('用雲端的 ' + incoming.length + ' 筆覆蓋這台的 ' + items.length + ' 筆？\n建議先「上傳到雲端」再拉。')) return gotCats;
         /* 保留這台本機才有的內嵌截圖，別被瘦身過的雲端資料清掉 */
         var localCovers = {};
         items.forEach(function (it) {
@@ -1808,11 +1821,12 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
     syncState.timer = setTimeout(function () { pushCloud(true); }, 3000);
   }
 
-  /* 包一層 save：非 __ 開頭的資料被寫入後，開了自動上傳就排程推送 */
+  /* 包一層 save：內容變動（一般項目、自訂分類）就排程自動推送，
+     只有 __settings（代理網址／通行碼這些裝置自己的設定）不算內容，不用推 */
   var _rawSave = save;
   save = function (item) {
     var p = _rawSave(item);
-    if (item && String(item.id).slice(0, 2) !== '__') scheduleAutoPush();
+    if (item && item.id !== '__settings') scheduleAutoPush();
     return p;
   };
 
