@@ -220,7 +220,8 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
         <button type="button" class="btn" id="importBackup">匯入備份</button>
         <button type="button" class="btn btn--quiet" id="addManual">手動新增一筆</button>
         <label class="vh" for="proxyUrl">OG 代理網址</label>
-        <input id="proxyUrl" type="url" placeholder="http://localhost/og.php">
+        <input id="proxyUrl" type="url" inputmode="url" enterkeyhint="done" placeholder="http://localhost/og.php">
+        <button type="button" class="btn" id="proxyUrlSave">套用</button>
         <input type="file" id="fileInput" accept="application/json" class="vh">
         <input type="file" id="shotFileInput" accept="image/*" multiple class="vh">
       </div>
@@ -1711,12 +1712,22 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
   document.getElementById('syncPush').addEventListener('click', function () { pushCloud(false); });
   document.getElementById('syncPull').addEventListener('click', function () { pullCloud({ force: false }); });
 
-  /* 改了「OG 代理網址」就存檔（補齊與雲端同步都靠這個欄位推導 Worker 位址） */
-  document.getElementById('proxyUrl').addEventListener('change', function () {
+  /* 改了「OG 代理網址」就存檔（補齊與雲端同步都靠這個欄位推導 Worker 位址）。
+     手機沒有「跳到下一欄再存檔」的習慣，光靠 blur 觸發的 change 事件不夠明確，
+     所以加一顆「套用」按鈕當作明確的送出動作，桌機的 change（Enter / 切走欄位）照樣有效。 */
+  var proxyUrlBox = document.getElementById('proxyUrl');
+  function saveProxyUrl() {
+    settings.endpoint = proxyUrlBox.value.trim() || settings.endpoint;
+    proxyUrlBox.value = settings.endpoint;
+    saveSettings();
+    toast('已套用代理網址');
+  }
+  proxyUrlBox.addEventListener('change', function () {
     settings.endpoint = this.value.trim() || settings.endpoint;
     this.value = settings.endpoint;
     saveSettings();
   });
+  document.getElementById('proxyUrlSave').addEventListener('click', saveProxyUrl);
 
   document.getElementById('enrich').addEventListener('click', function () {
     var box = document.getElementById('proxyUrl');
