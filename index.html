@@ -24,6 +24,32 @@ h1,h2,h3{ font-family:"Noto Serif TC", serif; }
 .masthead{ border-bottom:1px solid var(--hair); padding:2.25rem 0 1.5rem; }
 .masthead h1{ font-size:1.9rem; font-weight:700; margin:0 0 .3rem; }
 .masthead p{ color:var(--muted); margin:0; }
+.masthead__row{ display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+
+/* 圓形圖示按鈕：工具面板的開關、關閉鍵共用 */
+.icon-btn{ flex:none; display:inline-flex; align-items:center; justify-content:center;
+  width:2.75rem; height:2.75rem; padding:0; border-radius:999px;
+  background:var(--surface); color:var(--ink); border:1px solid var(--line); cursor:pointer;
+  transition:background-color .15s ease, transform .15s ease, border-color .15s ease; }
+.icon-btn svg{ width:1.35rem; height:1.35rem; }
+.icon-btn:hover{ background:var(--shade); border-color:var(--ink); }
+.icon-btn:active{ transform:scale(.92); }
+
+/* 工具面板：手機上收在螢幕底部的滑出面板，桌機一樣用，避免兩套邏輯 */
+.sheet-backdrop{ position:fixed; inset:0; background:rgba(43,39,36,.45);
+  opacity:0; transition:opacity .25s ease; z-index:40; }
+.sheet-backdrop.is-open{ opacity:1; }
+
+.sheet{ position:fixed; left:0; right:0; bottom:0; z-index:41;
+  max-width:37.5rem; margin:0 auto; max-height:85vh; overflow-y:auto;
+  border-radius:16px 16px 0 0; box-shadow:0 -12px 32px rgba(43,39,36,.28);
+  transform:translateY(100%); transition:transform .3s ease;
+  padding-bottom:calc(1.25rem + env(safe-area-inset-bottom)); }
+.sheet.is-open{ transform:translateY(0); }
+.sheet__head{ position:sticky; top:0; background:var(--surface);
+  display:flex; align-items:center; justify-content:space-between;
+  padding-top:.5rem; margin-bottom:.2rem; }
+.sheet__head h2{ margin:0; }
 
 .btn{ font:inherit; font-size:.9375rem; padding:.45rem 1rem; cursor:pointer;
   background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:8px;
@@ -168,7 +194,7 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
 
 .state{ background:var(--surface); border:1px dashed var(--line); border-radius:var(--r);
   padding:3rem 1.5rem; text-align:center; color:var(--muted); }
-.toast{ position:fixed; left:50%; bottom:1.5rem; transform:translateX(-50%);
+.toast{ position:fixed; left:50%; bottom:1.5rem; transform:translateX(-50%); z-index:50;
   background:var(--ink); color:#fff; padding:.6rem 1.1rem; border-radius:8px; font-size:.9375rem;
   opacity:0; pointer-events:none; transition:opacity .2s ease; max-width:90vw; }
 .toast.is-on{ opacity:1; }
@@ -181,16 +207,33 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
 <body>
 
 <header class="masthead">
-  <div class="wrap">
-    <h1>收藏收件匣</h1>
-    <p>在 Facebook 看到值得留的貼文，用書籤小工具存進來。內容存在你自己的瀏覽器裡，原文之後刪掉也不影響。</p>
+  <div class="wrap masthead__row">
+    <div>
+      <h1>收藏收件匣</h1>
+      <p>在 Facebook 看到值得留的貼文，用書籤小工具存進來。內容存在你自己的瀏覽器裡，原文之後刪掉也不影響。</p>
+    </div>
+    <button type="button" class="icon-btn" id="toolsToggle"
+      aria-haspopup="dialog" aria-expanded="false" aria-controls="toolsSheet" aria-label="開啟工具面板">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M19.14 12.94a7.14 7.14 0 0 0 .06-.94 7.14 7.14 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.14 7.14 0 0 0-.06.94c0 .32.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.14.24.42.32.66.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.05.24.25.42.5.42h3.84c.25 0 .45-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.24.1.52 0 .66-.22l1.92-3.32a.5.5 0 0 0-.12-.64ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/>
+      </svg>
+    </button>
   </div>
 </header>
 
+<div class="sheet-backdrop" id="toolsBackdrop" hidden></div>
+
 <main class="wrap">
 
-  <section class="panel" aria-labelledby="tools-h">
-    <h2 id="tools-h" class="vh">工具</h2>
+  <section class="panel sheet" id="toolsSheet" aria-labelledby="tools-h" role="dialog" aria-modal="true" hidden>
+    <div class="sheet__head">
+      <h2 id="tools-h">工具</h2>
+      <button type="button" class="icon-btn" id="toolsClose" aria-label="關閉工具面板">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path fill="currentColor" d="M6.4 5 5 6.4l5.6 5.6L5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6Z"/>
+        </svg>
+      </button>
+    </div>
 
     <details class="tool">
       <summary>書籤小工具</summary>
@@ -301,6 +344,74 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
   var CATEGORIES = DEFAULT_CATEGORIES.concat([INBOX_CAT]);    /* applyCategories() 會重建 */
   var catMap = {};
   CATEGORIES.forEach(function (c) { catMap[c.slug] = c; });
+
+  /* ============ 工具面板（手機底部滑出） ============
+     書籤小工具／資料與分類／雲端同步／貼上連結 四塊平常用不到，
+     手機上收進這個面板，點齒輪才叫出來，比四條手風琴排一整排省空間。 */
+  (function () {
+    var toggleBtn = document.getElementById('toolsToggle');
+    var closeBtn = document.getElementById('toolsClose');
+    var backdrop = document.getElementById('toolsBackdrop');
+    var sheet = document.getElementById('toolsSheet');
+    var lastFocus = null;
+    /* 面板開著時，背景內容設 inert：螢幕閱讀器滑動手勢也碰不到，不只是鍵盤 Tab 進不去 */
+    var inertTargets = [].slice.call(
+      document.querySelectorAll('body > header, body > footer, main > section:not(#toolsSheet)')
+    );
+
+    function focusableEls() {
+      return [].slice.call(sheet.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )).filter(function (el) { return el.offsetParent !== null; });
+    }
+
+    function onKeydown(e) {
+      if (e.key === 'Escape') { close(); return; }
+      if (e.key !== 'Tab') return;
+      var els = focusableEls();
+      if (!els.length) return;
+      var first = els[0], last = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+
+    function open() {
+      lastFocus = document.activeElement;
+      backdrop.hidden = false;
+      sheet.hidden = false;
+      requestAnimationFrame(function () {
+        backdrop.classList.add('is-open');
+        sheet.classList.add('is-open');
+      });
+      toggleBtn.setAttribute('aria-expanded', 'true');
+      document.body.style.overflow = 'hidden';
+      document.addEventListener('keydown', onKeydown);
+      inertTargets.forEach(function (el) { el.inert = true; });
+      var els = focusableEls();
+      (els[0] || closeBtn).focus();
+    }
+
+    function close() {
+      backdrop.classList.remove('is-open');
+      sheet.classList.remove('is-open');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+      document.body.style.overflow = '';
+      document.removeEventListener('keydown', onKeydown);
+      inertTargets.forEach(function (el) { el.inert = false; });
+      var done = function () {
+        backdrop.hidden = true;
+        sheet.hidden = true;
+        sheet.removeEventListener('transitionend', done);
+      };
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) done();
+      else sheet.addEventListener('transitionend', done);
+      if (lastFocus) lastFocus.focus();
+    }
+
+    toggleBtn.addEventListener('click', open);
+    closeBtn.addEventListener('click', close);
+    backdrop.addEventListener('click', close);
+  })();
 
   /* ============ 書籤小工具本體 ============
      寫成真正的函式再用 toString() 轉字串，避免手動跳脫引號出錯。
