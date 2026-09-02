@@ -140,7 +140,8 @@ details.help li{ margin-bottom:.35rem; }
 
 .item__body{ display:block; width:100%; font:inherit; font-size:.9375rem; color:var(--muted);
   white-space:pre-wrap; margin:0; max-height:6.5rem; overflow:auto; resize:vertical;
-  border:1px solid transparent; border-radius:6px; padding:.2rem .4rem; background:transparent; }
+  border:1px solid transparent; border-radius:6px; padding:.2rem .4rem; background:transparent;
+  transition:height .2s ease; }
 .item__body:hover{ border-color:var(--hair); }
 .item__body:focus{ border-color:var(--line); background:#fff; color:var(--ink); max-height:none; }
 .item__body::placeholder{ color:var(--muted); }
@@ -1557,8 +1558,12 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
     if (!it) return;
 
     if (btn.dataset.act === 'toggle') {
+      /* textarea 的顯示高度是 rows 屬性決定的，光拿掉 max-height 不會讓它變高，
+         必須另外用 scrollHeight 明確撐出高度，收合時再拿掉讓它退回 rows=2 的原始大小 */
       var body = wrapEl.querySelector('.item__body');
-      btn.textContent = body.classList.toggle('is-open') ? '收合' : '展開全文';
+      var open = body.classList.toggle('is-open');
+      body.style.height = open ? body.scrollHeight + 'px' : '';
+      btn.textContent = open ? '收合' : '展開全文';
     }
     if (btn.dataset.act === 'del') {
       if (!confirm('刪除「' + (it.title || '未命名') + '」？這個動作無法復原。')) return;
