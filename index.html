@@ -222,6 +222,7 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
         <label class="vh" for="proxyUrl">OG 代理網址</label>
         <input id="proxyUrl" type="url" placeholder="http://localhost/og.php">
         <input type="file" id="fileInput" accept="application/json" class="vh">
+        <input type="file" id="shotFileInput" accept="image/*" multiple class="vh">
       </div>
       <p id="storageNote" style="margin:.9rem 0 0;"></p>
 
@@ -1020,6 +1021,8 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
   /* ============ 畫面 ============ */
   var items = [], filter = 'all', pendingCover = null;
   var settings = { endpoint: 'http://localhost/og.php' };
+  /* 觸控裝置沒有 Ctrl+V，貼上截圖改走「按鈕直接讀剪貼簿」，讀不到再退回選圖 */
+  var isTouch = matchMedia('(pointer: coarse)').matches;
 
   var listEl = document.getElementById('list');
   var filtersEl = document.getElementById('filters');
@@ -1027,6 +1030,7 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
   var emptyState = document.getElementById('emptyState');
   var toastEl = document.getElementById('toast');
   var fileInput = document.getElementById('fileInput');
+  var shotFileInput = document.getElementById('shotFileInput');
 
   var toastTimer;
   function toast(msg) {
@@ -1324,6 +1328,38 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
     });
   }
 
+  /* 開啟原生選圖：手機版「貼上截圖」的主要路徑，一定能用，不依賴剪貼簿權限。
+     螢幕截圖本來就會存進系統相簿，改用選圖等於是「貼上」的手機版替代方案。 */
+  function openShotPicker(id) {
+    shotFileInput.dataset.forId = id;
+    shotFileInput.click();
+  }
+
+  shotFileInput.addEventListener('change', function () {
+    var id = shotFileInput.dataset.forId;
+    var files = [].slice.call(shotFileInput.files || []);
+    shotFileInput.value = '';
+    if (id && files.length) addShots(id, files);
+  });
+
+  /* 桌機的錦上添花：按下「貼上截圖」當下就嘗試直接讀一次系統剪貼簿，
+     不用先按 Ctrl+V 才看得到圖。讀不到就靜靜略過，原本的 Ctrl+V 監聽仍然可用。
+     手機不走這條路（見下方 isTouch 分支），避免非同步 resolve 後使用者手勢已過期，
+     導致真正需要的選圖退路 openShotPicker 在部分手機瀏覽器悄悄失效。 */
+  function clipboardReadShots(id) {
+    if (!(navigator.clipboard && navigator.clipboard.read)) return;
+    navigator.clipboard.read().then(function (clipItems) {
+      var jobs = [];
+      clipItems.forEach(function (ci) {
+        var type = ci.types.find(function (t) { return /^image\//.test(t); });
+        if (type) jobs.push(ci.getType(type));
+      });
+      return Promise.all(jobs);
+    }).then(function (blobs) {
+      if (blobs && blobs.length) addShots(id, blobs);
+    }).catch(function () { /* 沒授權或剪貼簿沒有圖片，略過即可 */ });
+  }
+
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && pendingCover) {
       pendingCover = null;
@@ -1419,9 +1455,14 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
       toast('已刪除');
     }
     if (btn.dataset.act === 'paste') {
+      /* 觸控裝置沒有 Ctrl+V：每次點擊直接開原生選圖，不進入「貼圖模式」 */
+      if (isTouch) { openShotPicker(id); return; }
       pendingCover = (pendingCover === id) ? null : id;
       render();
-      if (pendingCover) toast('貼圖模式：按 Ctrl+V，可連續貼多張，Esc 結束');
+      if (pendingCover) {
+        toast('貼圖模式：按 Ctrl+V，可連續貼多張，Esc 結束');
+        clipboardReadShots(id);
+      }
     }
     if (btn.dataset.act === 'rmshot') {
       var i = Number(btn.dataset.i);
