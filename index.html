@@ -1539,12 +1539,15 @@ select.item__cat{ font:inherit; font-size:.9375rem; padding:.35rem .6rem;
 
   listEl.addEventListener('change', function (e) {
     var act = e.target.dataset.act;
-    if (act !== 'cat' && act !== 'body') return;
+    if (act !== 'cat' && act !== 'body' && act !== 'title' && act !== 'note') return;
     var id = e.target.closest('.item').dataset.id;
     var it = items.find(function (x) { return x.id === id; });
     if (!it) return;
     /* 內文改動後重繪，同步「展開全文」按鈕與「只有連結」提示的顯示 */
     if (act === 'body') { it.body = e.target.value; save(it).then(render); return; }
+    /* title／note 打字時只存不重繪（避免整個清單重建把游標、焦點打斷），
+       離開欄位（blur/切走）才重繪一次，讓「待整理」篩選跟橘框即時反映最新狀態 */
+    if (act === 'title' || act === 'note') { it[act] = e.target.value; save(it).then(render); return; }
     it.category = e.target.value;
     save(it).then(render);
   });
